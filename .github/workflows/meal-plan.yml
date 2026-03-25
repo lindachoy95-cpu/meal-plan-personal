@@ -1,0 +1,30 @@
+name: Weekly Meal Plan Agent
+
+on:
+  schedule:
+    - cron: '0 10 * * 0'   # Every Sunday at 10:00 AM UTC (6 AM EST)
+  workflow_dispatch:         # Also allows manual trigger from GitHub UI
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Meal Plan Agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_ADDRESS:     ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          WEEKLY_BUDGET:     ${{ secrets.WEEKLY_BUDGET }}
+        run: python agent.py
