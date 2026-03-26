@@ -1,6 +1,7 @@
 """
 Weekly Meal Plan Agent
-- Searches for real grocery prices at Trader Joe's, Whole Foods, H-Mart
+- Reads cuisine choice from GitHub (set via form)
+- Searches Instacart (11101) + web for real local grocery prices
 - Generates a high-protein, low-carb 7-day meal plan within budget
 - Emails the plan to yourself every Sunday via Gmail SMTP
 """
@@ -8,30 +9,63 @@ Weekly Meal Plan Agent
 import os
 import json
 import time
+import base64
 import smtplib
+from urllib.request import urlopen, Request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import anthropic
 
-# ── Config (set these as GitHub Actions secrets) ──────────────────────────────
+# ── Config ────────────────────────────────────────────────────────────────────
 ANTHROPIC_API_KEY  = os.environ["ANTHROPIC_API_KEY"]
 GMAIL_ADDRESS      = os.environ["GMAIL_ADDRESS"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
+GITHUB_TOKEN       = os.environ["GITHUB_TOKEN"]
 TO_EMAIL           = "lindachoy95@gmail.com"
 WEEKLY_BUDGET      = int(os.environ.get("WEEKLY_BUDGET", "100"))
+ZIP_CODE           = "11101"
 STORES             = ["Trader Joe's", "Whole Foods", "H-Mart"]
+REPO               = "lindachoy95-cpu/meal-plan-personal"
 
-# ── Client ────────────────────────────────────────────────────────────────────
+INGREDIENTS = [
+    "chicken breast", "eggs", "salmon", "Greek yogurt",
+    "spinach", "broccoli", "canned tuna", "olive oil", "avocado", "ground beef"
+]
+
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 
-# ── Step 1: Search for grocery prices ─────────────────────────────────────────
-def get_grocery_prices() -> str:
-    print("🔍 Searching for current grocery prices...")
+# ── Step 0: Read cuisine choice from GitHub ───────────────────────────────────
+def get_cuisine_choice() -> str:
+    """Read the cuisine choice saved by the form."""
+    print("📋 Reading cuisine choice from form...")
+    try:
+        url = f"https://api.github.com/repos/{REPO}/contents/cuisine-choice.json"
+        req = Request(url, headers={
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github+json"
+        })
+        with urlopen(req) as resp:
+            data = json.loads(resp.read())
+            choice = json.loads(base64.b64decode(data["content"]).decode())
+            cuisine = choice.get("cuisine", "Varied")
+            print(f"✅ Cuisine this week: {cuisine}")
+            return cuisine
+    except Exception as e:
+        print(f"⚠️ Could not read cuisine choice ({e}), defaulting to Varied")
+        return "Varied"
+
+
+# ── Step 1a: Search Instacart for local prices ─────────────────────────────────
+def search_instacart_prices() -> str:
+    print("🛒 Searching Instacart for local prices near 11101...")
     stores_str = ", ".join(STORES)
-    prompt = f"""Search for grocery prices in NYC at {stores_str}.
-Find prices for: chicken breast, eggs, salmon, Greek yogurt, spinach, broccoli, canned tuna, olive oil, avocado.
-Return a brief price comparison. Be concise."""
+    ingredients_str = ", ".join(INGREDIENTS)
+    prompt = f"""Search Instacart for current grocery prices near zip code {ZIP_CODE} (Long Island City, NYC)
+at these stores: {stores_str}.
+Search for prices of: {ingredients_str}.
+Try searching "instacart trader joes prices {ZIP_CODE}", "instacart whole foods {ZIP_CODE}", "instacart h-mart NYC".
+Return a concise price summary with dollar amounts per item per store."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -39,25 +73,46 @@ Return a brief price comparison. Be concise."""
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
         messages=[{"role": "user", "content": prompt}]
     )
-    price_summary = " ".join(
-        block.text for block in response.content if hasattr(block, "text")
+    result = " ".join(block.text for block in response.content if hasattr(block, "text"))
+    print("✅ Instacart prices gathered.")
+    return result
+
+
+# ── Step 1b: Search web for general prices ─────────────────────────────────────
+def search_web_prices() -> str:
+    print("🌐 Searching web for NYC grocery prices...")
+    ingredients_str = ", ".join(INGREDIENTS)
+    prompt = f"""Search for current grocery prices in NYC for: {ingredients_str}.
+Look for prices at Trader Joe's, Whole Foods, H-Mart in New York City.
+Return a brief price comparison with specific dollar amounts. Be concise."""
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=500,
+        tools=[{"type": "web_search_20250305", "name": "web_search"}],
+        messages=[{"role": "user", "content": prompt}]
     )
-    print("✅ Prices gathered.")
-    return price_summary
+    result = " ".join(block.text for block in response.content if hasattr(block, "text"))
+    print("✅ Web prices gathered.")
+    return result
 
 
 # ── Step 2: Generate meal plan ────────────────────────────────────────────────
-def generate_meal_plan(price_summary: str) -> dict:
-    print("🧠 Generating meal plan...")
-    prompt = f"""Create a 7-day high-protein low-carb meal plan for 1 person, budget ${WEEKLY_BUDGET}/week.
-Prices this week: {price_summary[:500]}
-Preferred stores: {", ".join(STORES)}
+def generate_meal_plan(cuisine: str, instacart_prices: str, web_prices: str) -> dict:
+    print(f"🧠 Generating {cuisine} meal plan...")
+    prompt = f"""Create a 7-day high-protein low-carb {cuisine} meal plan for 1 person, budget ${WEEKLY_BUDGET}/week.
+ZIP: {ZIP_CODE} (Long Island City, NYC). Cuisine style: {cuisine}.
 
-Rules: high protein, low carb every meal. Stay under ${WEEKLY_BUDGET}. Reuse ingredients.
+Instacart local prices: {instacart_prices[:400]}
+Web research prices: {web_prices[:400]}
+
+Rules: high protein, low carb every meal. Stay under ${WEEKLY_BUDGET}. Reuse ingredients. Match {cuisine} cuisine style.
 
 Respond ONLY with valid JSON, no markdown:
 {{
   "weekOf": "2026-03-30",
+  "cuisine": "{cuisine}",
+  "priceSource": "Instacart 11101 + web research",
   "budget": {{
     "limit": {WEEKLY_BUDGET},
     "estimated": 85,
@@ -91,7 +146,7 @@ Respond ONLY with valid JSON, no markdown:
     {{"item": "Avocado", "quantity": "3 pack", "estimatedCost": 5, "bestStore": "Trader Joe's"}},
     {{"item": "Olive oil", "quantity": "1 bottle", "estimatedCost": 8, "bestStore": "Trader Joe's"}}
   ],
-  "agentNotes": "Chicken and eggs are reused across multiple meals to minimize cost. H-Mart offers the best prices on fresh produce and salmon this week."
+  "agentNotes": "Prices cross-referenced between Instacart 11101 and web research. Meals tailored to {cuisine} style while staying high protein and low carb."
 }}"""
 
     response = client.messages.create(
@@ -101,7 +156,7 @@ Respond ONLY with valid JSON, no markdown:
     )
     raw = response.content[0].text.replace("```json", "").replace("```", "").strip()
     plan = json.loads(raw)
-    print(f"✅ Meal plan generated. Estimated cost: ${plan['budget']['estimated']}")
+    print(f"✅ {cuisine} meal plan generated. Estimated cost: ${plan['budget']['estimated']}")
     return plan
 
 
@@ -139,6 +194,13 @@ def render_email(plan: dict) -> str:
 
     n = plan["nutrition"]
     b = plan["budget"]
+    cuisine = plan.get("cuisine", "Varied")
+    price_source = plan.get("priceSource", "Instacart 11101 + web research")
+
+    cuisine_emoji = {
+        "Mediterranean": "🫒", "Asian": "🥢", "Mexican": "🌮",
+        "American": "🍗", "Varied": "🌍"
+    }.get(cuisine, "🥗")
 
     return f"""<!DOCTYPE html>
 <html>
@@ -146,8 +208,9 @@ def render_email(plan: dict) -> str:
 <body style="margin:0;padding:0;background:#f5f7fa;font-family:'Segoe UI',system-ui,sans-serif;">
   <div style="max-width:620px;margin:32px auto;background:white;border-radius:20px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
     <div style="background:linear-gradient(135deg,#1b4332,#2d6a4f);padding:32px;color:white;">
-      <div style="font-size:28px;margin-bottom:6px;">🥗 Your Weekly Meal Plan</div>
+      <div style="font-size:32px;margin-bottom:6px;">{cuisine_emoji} Your {cuisine} Meal Plan</div>
       <div style="opacity:0.85;font-size:14px;">Week of {plan['weekOf']} · High Protein · Low Carb</div>
+      <div style="opacity:0.7;font-size:12px;margin-top:4px;">📍 Prices from {price_source}</div>
     </div>
     <div style="padding:28px;">
       <div style="display:flex;gap:12px;margin-bottom:24px;background:#f0fdf4;border-radius:12px;padding:16px;">
@@ -163,7 +226,7 @@ def render_email(plan: dict) -> str:
         </div>
         {breakdown_html}
         <div style="margin-top:10px;background:#f0fdf4;border-radius:8px;padding:10px 12px;font-size:13px;color:#059669;">
-          ✅ You're saving <strong>${b['savings']}</strong> this week! {plan['agentNotes']}
+          ✅ Saving <strong>${b['savings']}</strong> this week! {plan['agentNotes']}
         </div>
       </div>
       <h2 style="color:#1b4332;font-size:17px;margin:0 0 14px;">📅 7-Day Plan</h2>
@@ -173,25 +236,26 @@ def render_email(plan: dict) -> str:
         <thead><tr style="background:#f9fafb;">
           <th style="padding:10px 12px;text-align:left;font-size:12px;color:#6b7280;text-transform:uppercase;">Item</th>
           <th style="padding:10px 12px;text-align:left;font-size:12px;color:#6b7280;text-transform:uppercase;">Qty</th>
-          <th style="padding:10px 12px;text-align:left;font-size:12px;color:#6b7280;text-transform:uppercase;">Store</th>
+          <th style="padding:10px 12px;text-align:left;font-size:12px;color:#6b7280;text-transform:uppercase;">Best Store</th>
           <th style="padding:10px 12px;text-align:right;font-size:12px;color:#6b7280;text-transform:uppercase;">Cost</th>
         </tr></thead>
         <tbody>{shopping_rows}</tbody>
       </table>
     </div>
     <div style="background:#f9fafb;padding:20px 28px;text-align:center;color:#9ca3af;font-size:12px;border-top:1px solid #f3f4f6;">
-      Generated by your Weekly Meal Plan Agent · Every Sunday · High Protein · Low Carb
+      Weekly Meal Plan Agent · Every Sunday · High Protein · Low Carb · ZIP {ZIP_CODE}
     </div>
   </div>
 </body>
 </html>"""
 
 
-# ── Step 4: Send email via Gmail SMTP ─────────────────────────────────────────
+# ── Step 4: Send email ─────────────────────────────────────────────────────────
 def send_email(html: str, plan: dict):
     print(f"📧 Sending email to {TO_EMAIL}...")
+    cuisine = plan.get("cuisine", "")
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"🥗 Your Meal Plan — Week of {plan['weekOf']} (${plan['budget']['estimated']} groceries)"
+    msg["Subject"] = f"🥗 Your {cuisine} Meal Plan — Week of {plan['weekOf']} (${plan['budget']['estimated']} groceries)"
     msg["From"]    = GMAIL_ADDRESS
     msg["To"]      = TO_EMAIL
     msg.attach(MIMEText(html, "html"))
@@ -204,10 +268,17 @@ def send_email(html: str, plan: dict):
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     print("🚀 Meal Plan Agent starting...")
-    prices = get_grocery_prices()
-    print("⏳ Waiting 60 seconds to avoid rate limits...")
+
+    cuisine          = get_cuisine_choice()
+    instacart_prices = search_instacart_prices()
+    print("⏳ Waiting 60s...")
     time.sleep(60)
-    plan = generate_meal_plan(prices)
+
+    web_prices = search_web_prices()
+    print("⏳ Waiting 60s...")
+    time.sleep(60)
+
+    plan = generate_meal_plan(cuisine, instacart_prices, web_prices)
     html = render_email(plan)
     send_email(html, plan)
     print("✅ Done! Meal plan delivered.")
