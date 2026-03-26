@@ -50,5 +50,5 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           WEEKLY_BUDGET:      ${{ secrets.WEEKLY_BUDGET }}
           CUISINE:            ${{ github.event.inputs.cuisine }}
-         CUISINE_TOKEN:      ${{ secrets.CUISINE_TOKEN }}
+          CUISINE_TOKEN:      ${{ secrets.CUISINE_TOKEN }}
         run: python agent.py
