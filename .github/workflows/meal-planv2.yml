@@ -31,6 +31,7 @@ jobs:
         env:
           GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GITHUB_TOKEN:       ${{ secrets.CUISINE_TOKEN }}
         run: python remind.py
 
   meal-plan:
@@ -49,4 +50,5 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           WEEKLY_BUDGET:      ${{ secrets.WEEKLY_BUDGET }}
           CUISINE:            ${{ github.event.inputs.cuisine }}
+          GITHUB_TOKEN:       ${{ secrets.CUISINE_TOKEN }}
         run: python agent.py
