@@ -7,6 +7,7 @@ Weekly Meal Plan Agent
 
 import os
 import json
+import time
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -14,8 +15,8 @@ import anthropic
 
 # ── Config (set these as GitHub Actions secrets) ──────────────────────────────
 ANTHROPIC_API_KEY  = os.environ["ANTHROPIC_API_KEY"]
-GMAIL_ADDRESS      = os.environ["GMAIL_ADDRESS"]       # lindachoy95@gmail.com
-GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]  # Google App Password (NOT your real password)
+GMAIL_ADDRESS      = os.environ["GMAIL_ADDRESS"]
+GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 TO_EMAIL           = "lindachoy95@gmail.com"
 WEEKLY_BUDGET      = int(os.environ.get("WEEKLY_BUDGET", "100"))
 STORES             = ["Trader Joe's", "Whole Foods", "H-Mart"]
@@ -26,22 +27,18 @@ client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 # ── Step 1: Search for grocery prices ─────────────────────────────────────────
 def get_grocery_prices() -> str:
-    """Use Claude with web search to find current grocery prices."""
     print("🔍 Searching for current grocery prices...")
-
     stores_str = ", ".join(STORES)
- prompt = f"""Search for grocery prices in NYC at {stores_str}. 
-    Find prices for: chicken breast, eggs, salmon, Greek yogurt, spinach, 
-    broccoli, canned tuna, olive oil, avocado.
-    Return a brief price comparison. Be concise."""
+    prompt = f"""Search for grocery prices in NYC at {stores_str}.
+Find prices for: chicken breast, eggs, salmon, Greek yogurt, spinach, broccoli, canned tuna, olive oil, avocado.
+Return a brief price comparison. Be concise."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=1500,
+        max_tokens=500,
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
         messages=[{"role": "user", "content": prompt}]
     )
-
     price_summary = " ".join(
         block.text for block in response.content if hasattr(block, "text")
     )
@@ -51,68 +48,57 @@ def get_grocery_prices() -> str:
 
 # ── Step 2: Generate meal plan ────────────────────────────────────────────────
 def generate_meal_plan(price_summary: str) -> dict:
-    """Generate a 7-day meal plan using real prices to stay within budget."""
     print("🧠 Generating meal plan...")
-
-    prompt = f"""You are a nutrition expert and budget-conscious meal planner.
-
-Here are the current grocery prices you found for this week:
-{price_summary}
-
-Based on these REAL prices, create a 7-day high-protein, low-carb meal plan for 1 person
-with a STRICT weekly grocery budget of ${WEEKLY_BUDGET}.
-
+    prompt = f"""Create a 7-day high-protein low-carb meal plan for 1 person, budget ${WEEKLY_BUDGET}/week.
+Prices this week: {price_summary[:500]}
 Preferred stores: {", ".join(STORES)}
 
-Rules:
-- Every meal must be high protein, low carb
-- Total estimated grocery cost must be at or under ${WEEKLY_BUDGET}
-- Prefer the cheapest store for each ingredient based on the prices above
-- Reuse ingredients across multiple meals to reduce waste and cost
-- Include breakfast, lunch, and dinner each day
+Rules: high protein, low carb every meal. Stay under ${WEEKLY_BUDGET}. Reuse ingredients.
 
 Respond ONLY with valid JSON, no markdown:
 {{
-  "weekOf": "YYYY-MM-DD (this coming Monday's date)",
+  "weekOf": "2026-03-30",
   "budget": {{
     "limit": {WEEKLY_BUDGET},
-    "estimated": <number>,
-    "savings": <number>,
+    "estimated": 85,
+    "savings": 15,
     "breakdown": [
-      {{"category": "Proteins", "amount": <number>, "store": "best store"}},
-      {{"category": "Produce", "amount": <number>, "store": "best store"}},
-      {{"category": "Dairy & Fats", "amount": <number>, "store": "best store"}},
-      {{"category": "Pantry", "amount": <number>, "store": "best store"}}
+      {{"category": "Proteins", "amount": 45, "store": "Trader Joe's"}},
+      {{"category": "Produce", "amount": 20, "store": "H-Mart"}},
+      {{"category": "Dairy & Fats", "amount": 12, "store": "Trader Joe's"}},
+      {{"category": "Pantry", "amount": 8, "store": "Whole Foods"}}
     ]
   }},
-  "nutrition": {{
-    "avgCalories": <number>,
-    "avgProtein": <number>,
-    "avgCarbs": <number>,
-    "avgFat": <number>
-  }},
+  "nutrition": {{"avgCalories": 1800, "avgProtein": 150, "avgCarbs": 50, "avgFat": 80}},
   "days": [
-    {{
-      "day": "Monday",
-      "meals": {{
-        "breakfast": {{"name": "...", "protein": <g>, "carbs": <g>}},
-        "lunch":     {{"name": "...", "protein": <g>, "carbs": <g>}},
-        "dinner":    {{"name": "...", "protein": <g>, "carbs": <g>}}
-      }}
-    }}
+    {{"day": "Monday", "meals": {{"breakfast": {{"name": "Greek yogurt with almonds", "protein": 20, "carbs": 10}}, "lunch": {{"name": "Tuna salad over spinach", "protein": 35, "carbs": 5}}, "dinner": {{"name": "Grilled chicken with broccoli", "protein": 45, "carbs": 10}}}}}},
+    {{"day": "Tuesday", "meals": {{"breakfast": {{"name": "Scrambled eggs with spinach", "protein": 18, "carbs": 3}}, "lunch": {{"name": "Salmon salad", "protein": 38, "carbs": 5}}, "dinner": {{"name": "Ground beef stir fry with zucchini", "protein": 42, "carbs": 8}}}}}},
+    {{"day": "Wednesday", "meals": {{"breakfast": {{"name": "Cottage cheese with avocado", "protein": 22, "carbs": 8}}, "lunch": {{"name": "Chicken lettuce wraps", "protein": 36, "carbs": 6}}, "dinner": {{"name": "Baked salmon with asparagus", "protein": 44, "carbs": 7}}}}}},
+    {{"day": "Thursday", "meals": {{"breakfast": {{"name": "Eggs and turkey bacon", "protein": 24, "carbs": 2}}, "lunch": {{"name": "Tuna and avocado bowl", "protein": 34, "carbs": 6}}, "dinner": {{"name": "Chicken thighs with roasted broccoli", "protein": 46, "carbs": 9}}}}}},
+    {{"day": "Friday", "meals": {{"breakfast": {{"name": "Greek yogurt parfait", "protein": 20, "carbs": 12}}, "lunch": {{"name": "Ground beef lettuce tacos", "protein": 38, "carbs": 5}}, "dinner": {{"name": "Shrimp stir fry with cauliflower rice", "protein": 40, "carbs": 10}}}}}},
+    {{"day": "Saturday", "meals": {{"breakfast": {{"name": "Omelette with cheese and spinach", "protein": 22, "carbs": 3}}, "lunch": {{"name": "Salmon and cucumber salad", "protein": 36, "carbs": 5}}, "dinner": {{"name": "Grilled chicken thighs with green beans", "protein": 44, "carbs": 8}}}}}},
+    {{"day": "Sunday", "meals": {{"breakfast": {{"name": "Smoked salmon and eggs", "protein": 28, "carbs": 2}}, "lunch": {{"name": "Chicken and avocado salad", "protein": 38, "carbs": 7}}, "dinner": {{"name": "Beef and broccoli bowl", "protein": 45, "carbs": 10}}}}}}
   ],
   "shoppingList": [
-    {{"item": "...", "quantity": "...", "estimatedCost": <number>, "bestStore": "..."}}
+    {{"item": "Chicken breast 3lb", "quantity": "1 pack", "estimatedCost": 12, "bestStore": "Trader Joe's"}},
+    {{"item": "Ground beef 1lb", "quantity": "2 packs", "estimatedCost": 14, "bestStore": "Trader Joe's"}},
+    {{"item": "Salmon fillets", "quantity": "1lb", "estimatedCost": 10, "bestStore": "H-Mart"}},
+    {{"item": "Eggs", "quantity": "12 pack", "estimatedCost": 4, "bestStore": "Trader Joe's"}},
+    {{"item": "Greek yogurt", "quantity": "32oz", "estimatedCost": 5, "bestStore": "Trader Joe's"}},
+    {{"item": "Canned tuna", "quantity": "4 cans", "estimatedCost": 6, "bestStore": "Trader Joe's"}},
+    {{"item": "Spinach", "quantity": "5oz bag", "estimatedCost": 3, "bestStore": "H-Mart"}},
+    {{"item": "Broccoli", "quantity": "2 heads", "estimatedCost": 4, "bestStore": "H-Mart"}},
+    {{"item": "Avocado", "quantity": "3 pack", "estimatedCost": 5, "bestStore": "Trader Joe's"}},
+    {{"item": "Olive oil", "quantity": "1 bottle", "estimatedCost": 8, "bestStore": "Trader Joe's"}}
   ],
-  "agentNotes": "2-3 sentences explaining key budget decisions and ingredient reuse strategy"
+  "agentNotes": "Chicken and eggs are reused across multiple meals to minimize cost. H-Mart offers the best prices on fresh produce and salmon this week."
 }}"""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=3000,
+        max_tokens=2000,
         messages=[{"role": "user", "content": prompt}]
     )
-
     raw = response.content[0].text.replace("```json", "").replace("```", "").strip()
     plan = json.loads(raw)
     print(f"✅ Meal plan generated. Estimated cost: ${plan['budget']['estimated']}")
@@ -121,21 +107,17 @@ Respond ONLY with valid JSON, no markdown:
 
 # ── Step 3: Render HTML email ──────────────────────────────────────────────────
 def render_email(plan: dict) -> str:
-    """Render a beautiful HTML email from the meal plan."""
     days_html = ""
     for day in plan["days"]:
         days_html += f"""
         <div style="margin-bottom:20px;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
-          <div style="background:linear-gradient(90deg,#2d6a4f,#40916c);color:white;padding:10px 16px;font-weight:700;font-size:15px;">
-            {day['day']}
-          </div>
+          <div style="background:linear-gradient(90deg,#2d6a4f,#40916c);color:white;padding:10px 16px;font-weight:700;font-size:15px;">{day['day']}</div>
           <table style="width:100%;border-collapse:collapse;">"""
         for meal_type, meal in day["meals"].items():
             days_html += f"""
             <tr style="border-bottom:1px solid #f3f4f6;">
               <td style="padding:10px 16px;font-weight:700;color:#2d6a4f;width:90px;font-size:12px;text-transform:uppercase;">{meal_type}</td>
-              <td style="padding:10px 16px;font-size:14px;color:#1a1a2e;">
-                {meal['name']}
+              <td style="padding:10px 16px;font-size:14px;color:#1a1a2e;">{meal['name']}
                 <span style="color:#9ca3af;font-size:12px;margin-left:8px;">{meal['protein']}g protein · {meal['carbs']}g carbs</span>
               </td>
             </tr>"""
@@ -207,31 +189,26 @@ def render_email(plan: dict) -> str:
 
 # ── Step 4: Send email via Gmail SMTP ─────────────────────────────────────────
 def send_email(html: str, plan: dict):
-    """Send the meal plan email to yourself via Gmail."""
     print(f"📧 Sending email to {TO_EMAIL}...")
-
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"🥗 Your Meal Plan — Week of {plan['weekOf']} (${plan['budget']['estimated']} groceries)"
     msg["From"]    = GMAIL_ADDRESS
     msg["To"]      = TO_EMAIL
     msg.attach(MIMEText(html, "html"))
-
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
         server.sendmail(GMAIL_ADDRESS, TO_EMAIL, msg.as_string())
-
     print("✅ Email sent!")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    import time
     print("🚀 Meal Plan Agent starting...")
     prices = get_grocery_prices()
     print("⏳ Waiting 60 seconds to avoid rate limits...")
     time.sleep(60)
-    plan   = generate_meal_plan(prices)
-    html   = render_email(plan)
+    plan = generate_meal_plan(prices)
+    html = render_email(plan)
     send_email(html, plan)
     print("✅ Done! Meal plan delivered.")
 
