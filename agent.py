@@ -20,7 +20,7 @@ import anthropic
 ANTHROPIC_API_KEY  = os.environ["ANTHROPIC_API_KEY"]
 GMAIL_ADDRESS      = os.environ["GMAIL_ADDRESS"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
-GITHUB_TOKEN       = os.environ["GITHUB_TOKEN"]
+GITHUB_TOKEN       = os.environ["CUISINE_TOKEN"]
 TO_EMAIL           = "lindachoy95@gmail.com"
 WEEKLY_BUDGET      = int(os.environ.get("WEEKLY_BUDGET", "100"))
 ZIP_CODE           = "11101"
