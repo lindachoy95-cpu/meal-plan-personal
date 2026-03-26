@@ -225,8 +225,11 @@ def send_email(html: str, plan: dict):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
+    import time
     print("🚀 Meal Plan Agent starting...")
     prices = get_grocery_prices()
+    print("⏳ Waiting 60 seconds to avoid rate limits...")
+    time.sleep(60)
     plan   = generate_meal_plan(prices)
     html   = render_email(plan)
     send_email(html, plan)
