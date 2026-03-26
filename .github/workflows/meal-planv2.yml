@@ -1,0 +1,52 @@
+name: Weekly Meal Plan Agent
+
+on:
+  schedule:
+    - cron: '0 13 * * 6'   # Saturday 1:00 PM UTC (9 AM EST) — sends reminder email
+  workflow_dispatch:
+    inputs:
+      cuisine:
+        description: 'What cuisine this week?'
+        required: true
+        default: 'Varied'
+        type: choice
+        options:
+          - Varied
+          - Mediterranean
+          - Asian
+          - Mexican
+          - American
+
+jobs:
+  saturday-reminder:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 13 * * 6'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Send Saturday reminder
+        env:
+          GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python remind.py
+
+  meal-plan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Run Meal Plan Agent
+        env:
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          GMAIL_ADDRESS:      ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          WEEKLY_BUDGET:      ${{ secrets.WEEKLY_BUDGET }}
+          CUISINE:            ${{ github.event.inputs.cuisine }}
+        run: python agent.py
