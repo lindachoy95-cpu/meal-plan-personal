@@ -30,15 +30,10 @@ def get_grocery_prices() -> str:
     print("🔍 Searching for current grocery prices...")
 
     stores_str = ", ".join(STORES)
-    prompt = f"""Search for current grocery prices at {stores_str} in New York City for
-    these common high-protein, low-carb ingredients:
-    chicken breast, ground beef, salmon, eggs, Greek yogurt, cottage cheese,
-    broccoli, spinach, cauliflower, avocado, almonds, olive oil, canned tuna,
-    turkey breast, shrimp, zucchini, bell peppers, cream cheese.
-
-    For each ingredient, find the approximate price per unit or pound at each store.
-    Summarize the best deals and which store is cheapest for each item.
-    Return a concise price summary."""
+ prompt = f"""Search for grocery prices in NYC at {stores_str}. 
+    Find prices for: chicken breast, eggs, salmon, Greek yogurt, spinach, 
+    broccoli, canned tuna, olive oil, avocado.
+    Return a brief price comparison. Be concise."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
