@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🥗 This Week's Meal Plan</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: #0f1f17;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .card {
+    background: #1a2e22;
+    border: 1px solid #2d4a38;
+    border-radius: 24px;
+    padding: 40px;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  }
+
+  .emoji { font-size: 2.5rem; margin-bottom: 16px; display: block; }
+
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #e8f5ee;
+    margin-bottom: 6px;
+  }
+
+  .subtitle {
+    color: #6b9a7a;
+    font-size: 0.9rem;
+    margin-bottom: 32px;
+    line-height: 1.5;
+  }
+
+  .label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b9a7a;
+    margin-bottom: 12px;
+  }
+
+  .options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .option {
+    border: 2px solid #2d4a38;
+    border-radius: 14px;
+    padding: 16px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+    background: #152019;
+  }
+
+  .option:hover { border-color: #40916c; background: #1e3328; }
+
+  .option.selected {
+    border-color: #40916c;
+    background: #1e3d2a;
+    box-shadow: 0 0 0 1px #40916c;
+  }
+
+  .option .icon { font-size: 1.6rem; display: block; margin-bottom: 6px; }
+  .option .name { font-size: 0.9rem; font-weight: 600; color: #c8e6d4; }
+  .option .desc { font-size: 0.75rem; color: #6b9a7a; margin-top: 2px; }
+
+  .option.wide {
+    grid-column: span 2;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-align: left;
+    padding: 14px 16px;
+  }
+  .option.wide .icon { margin-bottom: 0; font-size: 1.4rem; }
+
+  .btn {
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, #2d6a4f, #40916c);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(64,145,108,0.4); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .success {
+    display: none;
+    text-align: center;
+    padding: 20px 0;
+  }
+  .success .big { font-size: 2.5rem; margin-bottom: 12px; }
+  .success h2 { color: #e8f5ee; font-size: 1.3rem; margin-bottom: 8px; }
+  .success p { color: #6b9a7a; font-size: 0.9rem; line-height: 1.5; }
+
+  .current {
+    background: #0f1f17;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 24px;
+    font-size: 0.85rem;
+    color: #6b9a7a;
+    display: none;
+  }
+  .current span { color: #74c69d; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="form-view">
+    <span class="emoji">🥗</span>
+    <h1>What are you feeling this week?</h1>
+    <p class="subtitle">Pick your cuisine and your Sunday meal plan will be ready in your inbox by 6 AM.</p>
+
+    <div id="current-choice" class="current"></div>
+
+    <div class="label">Choose a cuisine</div>
+    <div class="options">
+      <div class="option" data-val="Mediterranean" onclick="select(this)">
+        <span class="icon">🫒</span>
+        <div class="name">Mediterranean</div>
+        <div class="desc">Greek, Lebanese, Italian</div>
+      </div>
+      <div class="option" data-val="Asian" onclick="select(this)">
+        <span class="icon">🥢</span>
+        <div class="name">Asian</div>
+        <div class="desc">Korean, Japanese, Chinese</div>
+      </div>
+      <div class="option" data-val="Mexican" onclick="select(this)">
+        <span class="icon">🌮</span>
+        <div class="name">Mexican</div>
+        <div class="desc">Tacos, bowls, salsas</div>
+      </div>
+      <div class="option" data-val="American" onclick="select(this)">
+        <span class="icon">🍗</span>
+        <div class="name">American</div>
+        <div class="desc">Classic comfort food</div>
+      </div>
+      <div class="option wide" data-val="Varied" onclick="select(this)">
+        <span class="icon">🌍</span>
+        <div>
+          <div class="name">Surprise me</div>
+          <div class="desc">Mix of anything this week</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn" id="submit-btn" onclick="submit()" disabled>
+      Save My Choice →
+    </button>
+  </div>
+
+  <div class="success" id="success-view">
+    <div class="big">✅</div>
+    <h2>You're all set!</h2>
+    <p>Your <strong id="chosen-cuisine" style="color:#74c69d"></strong> meal plan will be in your inbox by Sunday 6 AM EST.</p>
+    <br>
+    <p style="font-size:0.8rem;">Changed your mind? <a href="#" onclick="reset()" style="color:#40916c;">Pick again</a></p>
+  </div>
+</div>
+
+<script>
+  const REPO   = "lindachoy95-cpu/meal-plan-personal";
+  const FILE   = "cuisine-choice.json";
+  const BRANCH = "main";
+  // Add your GitHub Personal Access Token as a query param: ?token=YOUR_TOKEN
+  // OR hardcode it below (only safe since this is a private repo)
+  const TOKEN  = new URLSearchParams(window.location.search).get("token") || "";
+
+  let selected = null;
+
+  function select(el) {
+    document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    selected = el.dataset.val;
+    document.getElementById('submit-btn').disabled = false;
+  }
+
+  async function submit() {
+    if (!selected) return;
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      // Get current SHA (needed for update)
+      let sha = null;
+      const getResp = await fetch(
+        `https://api.github.com/repos/${REPO}/contents/${FILE}`,
+        { headers: { Authorization: `token ${TOKEN}`, Accept: "application/vnd.github+json" } }
+      );
+      if (getResp.ok) {
+        const data = await getResp.json();
+        sha = data.sha;
+      }
+
+      // Write new choice
+      const content = btoa(JSON.stringify({ cuisine: selected, updatedAt: new Date().toISOString() }));
+      const body = { message: `Cuisine choice: ${selected}`, content, branch: BRANCH };
+      if (sha) body.sha = sha;
+
+      const putResp = await fetch(
+        `https://api.github.com/repos/${REPO}/contents/${FILE}`,
+        {
+          method: "PUT",
+          headers: { Authorization: `token ${TOKEN}`, "Content-Type": "application/json", Accept: "application/vnd.github+json" },
+          body: JSON.stringify(body)
+        }
+      );
+
+      if (putResp.ok) {
+        document.getElementById('chosen-cuisine').textContent = selected;
+        document.getElementById('form-view').style.display = 'none';
+        document.getElementById('success-view').style.display = 'block';
+      } else {
+        throw new Error("Save failed");
+      }
+    } catch(e) {
+      btn.disabled = false;
+      btn.textContent = 'Save My Choice →';
+      alert("Something went wrong. Make sure your token is in the URL: ?token=YOUR_TOKEN");
+    }
+  }
+
+  function reset() {
+    document.getElementById('form-view').style.display = 'block';
+    document.getElementById('success-view').style.display = 'none';
+    selected = null;
+    document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+    document.getElementById('submit-btn').disabled = true;
+  }
+
+  // On load, show current choice if exists
+  async function loadCurrent() {
+    if (!TOKEN) return;
+    try {
+      const resp = await fetch(
+        `https://api.github.com/repos/${REPO}/contents/${FILE}`,
+        { headers: { Authorization: `token ${TOKEN}`, Accept: "application/vnd.github+json" } }
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        const parsed = JSON.parse(atob(data.content));
+        const el = document.getElementById('current-choice');
+        el.style.display = 'block';
+        el.innerHTML = `Current choice: <span>${parsed.cuisine}</span> — update it below if you want something different`;
+      }
+    } catch(e) {}
+  }
+  loadCurrent();
+</script>
+</body>
+</html>
